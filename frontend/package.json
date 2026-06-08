@@ -5,8 +5,10 @@
   "dependencies": {
     "@reduxjs/toolkit": "^2.0.0",
     "axios": "^1.6.0",
+    "konva": "^10.3.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
+    "react-konva": "^18.2.16",
     "react-redux": "^9.0.0",
     "uuid": "^9.0.0"
   },
