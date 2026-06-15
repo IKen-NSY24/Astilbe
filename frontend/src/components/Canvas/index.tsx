@@ -4,7 +4,7 @@ import Konva from 'konva';
 import { useAppDispatch, useAppSelector } from '../../hooks';
 import {
   startStroke, continueStroke, endStroke,
-  clearSelection, updateElement, setCanvasTransform,
+  clearSelection, updateElement, setCanvasTransform, addRectangle,
 } from '../../store/slices/editorSlice';
 import { StrokeData, StickyElement, TextElement, ShapeElement, CanvasState } from '../../types';
 
@@ -220,6 +220,9 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ width, height, onSelectElem
   const isDrawing = useRef(false);
   const isPanning = useRef(false);
   const panStart = useRef({ mx: 0, my: 0, ox: 0, oy: 0 });
+  const isDrawingRect = useRef(false);
+  const rectStart = useRef({ x: 0, y: 0 });
+  const [draftRect, setDraftRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -227,6 +230,7 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ width, height, onSelectElem
     if (!stage) return;
     stage.container().style.cursor =
       activeTool === 'pen' ? 'crosshair' :
+      activeTool === 'rectangle' ? 'crosshair' :
       activeTool === 'eraser' ? 'cell' :
       activeTool === 'hand' ? 'grab' : 'default';
   }, [activeTool]);
@@ -244,6 +248,12 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ width, height, onSelectElem
       if (!pos) return;
       isDrawing.current = true;
       dispatch(startStroke(pos));
+    } else if (activeTool === 'rectangle') {
+      const pos = stage.getRelativePointerPosition();
+      if (!pos) return;
+      isDrawingRect.current = true;
+      rectStart.current = { x: pos.x, y: pos.y };
+      setDraftRect({ x: pos.x, y: pos.y, width: 0, height: 0 });
     } else if (activeTool === 'hand') {
       isPanning.current = true;
       panStart.current = { mx: e.evt.clientX, my: e.evt.clientY, ox: canvas.offsetX, oy: canvas.offsetY };
@@ -258,6 +268,17 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ width, height, onSelectElem
     if (isDrawing.current) {
       const pos = stage.getRelativePointerPosition();
       if (pos) dispatch(continueStroke(pos));
+    } else if (isDrawingRect.current) {
+      const pos = stage.getRelativePointerPosition();
+      if (!pos) return;
+      const s = rectStart.current;
+      // どの方向にドラッグしても始点・終点から左上/右下を求める
+      setDraftRect({
+        x: Math.min(s.x, pos.x),
+        y: Math.min(s.y, pos.y),
+        width: Math.abs(pos.x - s.x),
+        height: Math.abs(pos.y - s.y),
+      });
     } else if (isPanning.current) {
       dispatch(setCanvasTransform({
         offsetX: panStart.current.ox + e.evt.clientX - panStart.current.mx,
@@ -271,8 +292,16 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ width, height, onSelectElem
       isDrawing.current = false;
       dispatch(endStroke());
     }
+    if (isDrawingRect.current) {
+      isDrawingRect.current = false;
+      // 極端に小さい矩形（クリックのみ等）は無視する
+      if (draftRect && draftRect.width > 3 && draftRect.height > 3) {
+        dispatch(addRectangle(draftRect));
+      }
+      setDraftRect(null);
+    }
     isPanning.current = false;
-  }, [dispatch]);
+  }, [dispatch, draftRect]);
 
   const handleWheel = useCallback((e: Konva.KonvaEventObject<WheelEvent>) => {
     if (e.evt.ctrlKey || e.evt.metaKey) {
@@ -324,6 +353,15 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ width, height, onSelectElem
             return null;
           })}
         </Layer>
+        {draftRect && (
+          <Layer listening={false}>
+            <Rect
+              x={draftRect.x} y={draftRect.y}
+              width={draftRect.width} height={draftRect.height}
+              stroke="#1a1a2e" strokeWidth={2} dash={[6, 4]}
+            />
+          </Layer>
+        )}
       </Stage>
       {editingElement && (
         <EditOverlay

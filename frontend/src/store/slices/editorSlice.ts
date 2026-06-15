@@ -141,6 +141,20 @@ const editorSlice = createSlice({
       state.selectedElementIds = [el.id];
       state.isDirty = true;
     },
+    addRectangle(state, action: PayloadAction<{ x: number; y: number; width: number; height: number }>) {
+      const el: ShapeElement = {
+        id: uuidv4(), type: 'shape',
+        x: action.payload.x, y: action.payload.y,
+        width: action.payload.width, height: action.payload.height, rotation: 0,
+        zIndex: state.elements.length, locked: false, visible: true,
+        shapeType: 'rectangle',
+        // 中身は塗りつぶさず、背後の線・テキスト・他要素が見えるようにする
+        fillColor: 'transparent', strokeColor: '#1a1a2e', strokeWidth: 2, opacity: 1,
+      };
+      state.elements.push(el);
+      state.selectedElementIds = [el.id];
+      state.isDirty = true;
+    },
     setCanvasTransform(state, action: PayloadAction<Partial<CanvasState>>) {
       state.canvas = { ...state.canvas, ...action.payload };
     },
@@ -181,7 +195,7 @@ export const {
   setActiveTool, setPenSettings, startStroke, continueStroke, endStroke,
   clearStrokes, addElement, updateElement, deleteSelectedElements,
   selectElement, clearSelection, addSticky, addTextElement, addShape,
-  setCanvasTransform, setNoteTitle, markSaved, loadNote,
+  addRectangle, setCanvasTransform, setNoteTitle, markSaved, loadNote,
   reorderElement,
 } = editorSlice.actions;
 export default editorSlice.reducer;

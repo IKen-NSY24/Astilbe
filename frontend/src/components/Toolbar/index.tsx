@@ -10,6 +10,7 @@ interface ToolbarProps {
 const tools = [
   { id: 'pen' as const, label: '✏️', title: 'ペン' },
   { id: 'eraser' as const, label: '⬜', title: '消しゴム' },
+  { id: 'rectangle' as const, label: '▭', title: '長方形' },
   { id: 'select' as const, label: '↖', title: '選択' },
   { id: 'hand' as const, label: '✋', title: '移動' },
 ];
