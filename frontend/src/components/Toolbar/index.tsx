@@ -1,23 +1,17 @@
 import React from 'react';
 import { useAppDispatch, useAppSelector } from '../../hooks';
-import { setActiveTool, setPenSettings, clearStrokes, setNoteTitle, deleteSelectedElements } from '../../store/slices/editorSlice';
-
-interface ToolbarProps {
-  onNewNote: () => void;
-  onShowNotesList: () => void;
-}
+import { setActiveTool, setPenSettings, clearStrokes, deleteElement } from '../../store/slices/editorSlice';
 
 const tools = [
   { id: 'pen' as const, label: '✏️', title: 'ペン' },
   { id: 'eraser' as const, label: '⬜', title: '消しゴム' },
   { id: 'rectangle' as const, label: '▭', title: '長方形' },
   { id: 'select' as const, label: '↖', title: '選択' },
-  { id: 'hand' as const, label: '✋', title: '移動' },
 ];
 
-const Toolbar: React.FC<ToolbarProps> = ({ onNewNote, onShowNotesList }) => {
+const Toolbar: React.FC = () => {
   const dispatch = useAppDispatch();
-  const { activeTool, penSettings, noteTitle, isDirty, selectedElementIds } = useAppSelector(s => s.editor);
+  const { activeTool, penSettings, selectedId } = useAppSelector(s => s.editor);
 
   const btn = (active: boolean): React.CSSProperties => ({
     width: 36, height: 36,
@@ -38,14 +32,7 @@ const Toolbar: React.FC<ToolbarProps> = ({ onNewNote, onShowNotesList }) => {
       display: 'flex', alignItems: 'center', gap: 6, padding: '0 16px',
       zIndex: 1000, boxShadow: '0 1px 4px rgba(0,0,0,0.06)',
     }}>
-      <input
-        value={noteTitle}
-        onChange={e => dispatch(setNoteTitle(e.target.value))}
-        style={{ border: 'none', outline: 'none', fontSize: 15, fontWeight: 600, color: '#1a1a2e', background: 'transparent', width: 200, borderBottom: '1px solid transparent' }}
-        onFocus={e => (e.target.style.borderBottomColor = '#3b82f6')}
-        onBlur={e => (e.target.style.borderBottomColor = 'transparent')}
-      />
-      {isDirty && <span style={{ fontSize: 11, color: '#9ca3af' }}>未保存</span>}
+      <span style={{ fontSize: 15, fontWeight: 700, color: '#1a1a2e', marginRight: 4 }}>MemoEditor</span>
       {divider}
 
       {tools.map(t => (
@@ -77,14 +64,12 @@ const Toolbar: React.FC<ToolbarProps> = ({ onNewNote, onShowNotesList }) => {
         {divider}
       </>}
 
-      {selectedElementIds.length > 0 && <>
-        <button title="選択削除" onClick={() => dispatch(deleteSelectedElements())} style={{ ...btn(false), color: '#ef4444' }}>🗑</button>
+      {selectedId && <>
+        <button title="選択削除" onClick={() => dispatch(deleteElement())} style={{ ...btn(false), color: '#ef4444' }}>🗑</button>
         {divider}
       </>}
 
       <div style={{ flex: 1 }} />
-      <button onClick={onNewNote} style={{ ...btn(false), width: 'auto', padding: '0 12px', fontSize: 13, color: '#374151' }}>＋ 新規</button>
-      <button onClick={onShowNotesList} title="メモ一覧" style={{ ...btn(false), fontSize: 18 }}>📂</button>
     </div>
   );
 };

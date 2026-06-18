@@ -1,4 +1,4 @@
-export type ToolType = 'pen' | 'eraser' | 'select' | 'hand' | 'rectangle';
+export type ToolType = 'select' | 'pen' | 'eraser' | 'rectangle' | 'line' | 'text';
 
 export interface Point {
   x: number;
@@ -18,12 +18,6 @@ export interface PenSettings {
   opacity: number;
 }
 
-export interface CanvasState {
-  scale: number;
-  offsetX: number;
-  offsetY: number;
-}
-
 interface BaseElement {
   id: string;
   x: number;
@@ -36,14 +30,6 @@ interface BaseElement {
   visible: boolean;
 }
 
-export interface StickyElement extends BaseElement {
-  type: 'sticky';
-  content: string;
-  bgColor: string;
-  textColor: string;
-  fontSize: number;
-}
-
 export interface TextElement extends BaseElement {
   type: 'text';
   content: string;
@@ -54,7 +40,7 @@ export interface TextElement extends BaseElement {
   align: 'left' | 'center' | 'right';
 }
 
-export type ShapeType = 'rectangle' | 'circle' | 'arrow' | 'line';
+export type ShapeType = 'rectangle' | 'line';
 
 export interface ShapeElement extends BaseElement {
   type: 'shape';
@@ -65,13 +51,4 @@ export interface ShapeElement extends BaseElement {
   opacity: number;
 }
 
-export type CanvasElement = StickyElement | TextElement | ShapeElement;
-
-export interface Note {
-  id: string;
-  title: string;
-  elements: CanvasElement[];
-  strokes: StrokeData[];
-  createdAt: string;
-  updatedAt: string;
-}
+export type CanvasElement = TextElement | ShapeElement;
