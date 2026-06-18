@@ -1,228 +1,378 @@
 import React, { useRef, useEffect, useCallback, useState } from 'react';
+import { Stage, Layer, Line, Rect, Ellipse, Arrow, Text, Group, Circle } from 'react-konva';
+import Konva from 'konva';
 import { useAppDispatch, useAppSelector } from '../../hooks';
 import {
   startStroke, continueStroke, endStroke,
-  selectElement, clearSelection, updateElement,
+  clearSelection, updateElement, setCanvasTransform, addRectangle,
 } from '../../store/slices/editorSlice';
-import { CanvasElement, StrokeData, StickyElement, TextElement, ShapeElement } from '../../types';
+import { StrokeData, StickyElement, TextElement, ShapeElement, CanvasState } from '../../types';
 
-const getCanvasPoint = (canvas: HTMLCanvasElement, e: React.MouseEvent): { x: number; y: number } => {
-  const rect = canvas.getBoundingClientRect();
-  return { x: e.clientX - rect.left, y: e.clientY - rect.top };
-};
+const toPoints = (stroke: StrokeData): number[] => stroke.points.flatMap(p => [p.x, p.y]);
 
-const drawStrokes = (ctx: CanvasRenderingContext2D, strokes: StrokeData[]) => {
-  strokes.forEach(stroke => {
-    if (stroke.points.length < 2) return;
-    ctx.beginPath();
-    ctx.strokeStyle = stroke.color;
-    ctx.lineWidth = stroke.width;
-    ctx.globalAlpha = stroke.opacity;
-    ctx.lineCap = 'round';
-    ctx.lineJoin = 'round';
-    ctx.moveTo(stroke.points[0].x, stroke.points[0].y);
-    for (let i = 1; i < stroke.points.length - 1; i++) {
-      const mx = (stroke.points[i].x + stroke.points[i + 1].x) / 2;
-      const my = (stroke.points[i].y + stroke.points[i + 1].y) / 2;
-      ctx.quadraticCurveTo(stroke.points[i].x, stroke.points[i].y, mx, my);
-    }
-    ctx.lineTo(stroke.points[stroke.points.length - 1].x, stroke.points[stroke.points.length - 1].y);
-    ctx.stroke();
-    ctx.globalAlpha = 1;
-  });
-};
+const StrokeLine: React.FC<{ stroke: StrokeData }> = ({ stroke }) => (
+  <Line
+    points={toPoints(stroke)}
+    stroke={stroke.color}
+    strokeWidth={stroke.width}
+    opacity={stroke.opacity}
+    lineCap="round"
+    lineJoin="round"
+    tension={0.4}
+  />
+);
 
-interface DrawingCanvasProps {
-  width: number;
-  height: number;
-}
+// ── Element renderers ─────────────────────────────────────────────────────────
 
-const DrawingCanvas: React.FC<DrawingCanvasProps> = ({ width, height }) => {
-  const canvasRef = useRef<HTMLCanvasElement>(null);
+const STICKY_COLORS = [
+  { bg: '#fef08a', text: '#1a1a2e' }, { bg: '#86efac', text: '#1a1a2e' },
+  { bg: '#93c5fd', text: '#1a1a2e' }, { bg: '#f9a8d4', text: '#1a1a2e' },
+  { bg: '#fdba74', text: '#1a1a2e' }, { bg: '#c4b5fd', text: '#1a1a2e' },
+];
+
+const STICKY_TEXT_INSET = { left: 12, top: 32, right: 12, bottom: 12 };
+
+const StickyNoteShape: React.FC<{
+  el: StickyElement; isSelected: boolean; editing: boolean;
+  onSelect: (id: string, multi: boolean) => void;
+  onEdit: (id: string) => void;
+}> = ({ el, isSelected, editing, onSelect, onEdit }) => {
   const dispatch = useAppDispatch();
-  const { activeTool, currentStrokes, activeStroke } = useAppSelector(s => s.editor);
-  const isDrawing = useRef(false);
+  return (
+    <Group
+      x={el.x} y={el.y} rotation={el.rotation} draggable
+      onMouseDown={(e) => { e.cancelBubble = true; onSelect(el.id, e.evt.metaKey || e.evt.ctrlKey); }}
+      onDblClick={() => onEdit(el.id)}
+      onDragEnd={(e) => dispatch(updateElement({ id: el.id, updates: { x: e.target.x(), y: e.target.y() } }))}
+    >
+      <Rect
+        width={el.width} height={el.height} fill={el.bgColor} cornerRadius={4}
+        shadowColor="black" shadowOffsetX={4} shadowOffsetY={6}
+        shadowBlur={isSelected ? 22 : 16} shadowOpacity={isSelected ? 0.18 : 0.12}
+        stroke={isSelected ? '#3b82f6' : undefined} strokeWidth={isSelected ? 2 : 0}
+      />
+      {isSelected && STICKY_COLORS.map((c, i) => (
+        <Circle
+          key={c.bg}
+          x={el.width - 16 - (STICKY_COLORS.length - 1 - i) * 18} y={18} radius={6}
+          fill={c.bg}
+          stroke={el.bgColor === c.bg ? '#1a1a2e' : 'rgba(0,0,0,0.25)'}
+          strokeWidth={el.bgColor === c.bg ? 2 : 1}
+          onMouseDown={(e) => {
+            e.cancelBubble = true;
+            dispatch(updateElement({ id: el.id, updates: { bgColor: c.bg, textColor: c.text } }));
+          }}
+        />
+      ))}
+      {!editing && (
+        <Text
+          text={el.content}
+          x={STICKY_TEXT_INSET.left} y={STICKY_TEXT_INSET.top}
+          width={el.width - STICKY_TEXT_INSET.left - STICKY_TEXT_INSET.right}
+          height={el.height - STICKY_TEXT_INSET.top - STICKY_TEXT_INSET.bottom}
+          fontSize={el.fontSize} fontFamily='"Noto Sans JP", sans-serif'
+          fill={el.textColor} lineHeight={1.5} wrap="word"
+        />
+      )}
+    </Group>
+  );
+};
 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    ctx.clearRect(0, 0, width, height);
-    drawStrokes(ctx, currentStrokes);
-    if (activeStroke) drawStrokes(ctx, [activeStroke]);
-  }, [currentStrokes, activeStroke, width, height]);
+const TextElementShape: React.FC<{
+  el: TextElement; isSelected: boolean; editing: boolean;
+  onSelect: (id: string, multi: boolean) => void;
+  onEdit: (id: string) => void;
+}> = ({ el, isSelected, editing, onSelect, onEdit }) => {
+  const dispatch = useAppDispatch();
+  return (
+    <Group
+      x={el.x} y={el.y} rotation={el.rotation} draggable
+      onMouseDown={(e) => { e.cancelBubble = true; onSelect(el.id, e.evt.metaKey || e.evt.ctrlKey); }}
+      onDblClick={() => onEdit(el.id)}
+      onDragEnd={(e) => dispatch(updateElement({ id: el.id, updates: { x: e.target.x(), y: e.target.y() } }))}
+    >
+      {isSelected && (
+        <Rect x={-4} y={-4} width={el.width + 8} height={el.height + 8}
+          stroke="#3b82f6" strokeWidth={2} listening={false} />
+      )}
+      {!editing && (
+        <Text
+          text={el.content} width={el.width} padding={4}
+          fontFamily={el.fontFamily} fontSize={el.fontSize}
+          fontStyle={el.fontWeight === 'bold' ? 'bold' : 'normal'}
+          fill={el.color} align={el.align} wrap="word"
+        />
+      )}
+    </Group>
+  );
+};
 
-  const handleStart = useCallback((e: React.MouseEvent) => {
-    if (activeTool !== 'pen' && activeTool !== 'eraser') return;
-    isDrawing.current = true;
-    const pt = getCanvasPoint(canvasRef.current!, e);
-    dispatch(startStroke(pt));
-  }, [activeTool, dispatch]);
+const ShapeElementShape: React.FC<{
+  el: ShapeElement; isSelected: boolean;
+  onSelect: (id: string, multi: boolean) => void;
+}> = ({ el, isSelected, onSelect }) => {
+  const dispatch = useAppDispatch();
+  const w = el.width, h = el.height;
 
-  const handleMove = useCallback((e: React.MouseEvent) => {
-    if (!isDrawing.current) return;
-    const pt = getCanvasPoint(canvasRef.current!, e);
-    dispatch(continueStroke(pt));
-  }, [dispatch]);
-
-  const handleEnd = useCallback(() => {
-    if (!isDrawing.current) return;
-    isDrawing.current = false;
-    dispatch(endStroke());
-  }, [dispatch]);
-
-  const cursor = activeTool === 'pen' ? 'crosshair' : activeTool === 'eraser' ? 'cell' : 'default';
+  let shape: React.ReactNode;
+  if (el.shapeType === 'circle') {
+    shape = <Ellipse x={w / 2} y={h / 2} radiusX={Math.max(w / 2 - el.strokeWidth, 0)} radiusY={Math.max(h / 2 - el.strokeWidth, 0)}
+      fill={el.fillColor} stroke={el.strokeColor} strokeWidth={el.strokeWidth} />;
+  } else if (el.shapeType === 'arrow') {
+    shape = <Arrow points={[0, h / 2, w, h / 2]} fill={el.strokeColor} stroke={el.strokeColor}
+      strokeWidth={el.strokeWidth} pointerLength={12} pointerWidth={12} lineCap="round" lineJoin="round" />;
+  } else if (el.shapeType === 'line') {
+    shape = <Line points={[0, h / 2, w, h / 2]} stroke={el.strokeColor} strokeWidth={el.strokeWidth} lineCap="round" />;
+  } else {
+    shape = <Rect x={el.strokeWidth / 2} y={el.strokeWidth / 2}
+      width={Math.max(w - el.strokeWidth, 0)} height={Math.max(h - el.strokeWidth, 0)}
+      fill={el.fillColor} stroke={el.strokeColor} strokeWidth={el.strokeWidth} cornerRadius={4} />;
+  }
 
   return (
-    <canvas
-      ref={canvasRef}
-      width={width}
-      height={height}
-      style={{ position: 'absolute', top: 0, left: 0, cursor }}
-      onMouseDown={handleStart}
-      onMouseMove={handleMove}
-      onMouseUp={handleEnd}
-      onMouseLeave={handleEnd}
+    <Group
+      x={el.x} y={el.y} rotation={el.rotation} opacity={el.opacity} draggable
+      onMouseDown={(e) => { e.cancelBubble = true; onSelect(el.id, e.evt.metaKey || e.evt.ctrlKey); }}
+      onDragEnd={(e) => dispatch(updateElement({ id: el.id, updates: { x: e.target.x(), y: e.target.y() } }))}
+    >
+      {shape}
+      {isSelected && <Rect x={-2} y={-2} width={w + 4} height={h + 4} stroke="#3b82f6" strokeWidth={2} listening={false} />}
+    </Group>
+  );
+};
+
+// ── Inline text editing overlay (HTML <textarea> placed over the Konva stage) ─
+// Konva renders to <canvas>, so text editing needs a real DOM input layered on
+// top at the element's on-screen position/size, kept in sync with stage pan/zoom.
+
+interface EditOverlayProps {
+  element: StickyElement | TextElement;
+  canvas: CanvasState;
+  onChange: (content: string) => void;
+  onClose: () => void;
+}
+
+const EditOverlay: React.FC<EditOverlayProps> = ({ element, canvas, onChange, onClose }) => {
+  const ref = useRef<HTMLTextAreaElement>(null);
+
+  useEffect(() => {
+    ref.current?.focus();
+    ref.current?.select();
+  }, [element.id]);
+
+  let rect: { x: number; y: number; w: number; h: number };
+  let textStyle: React.CSSProperties;
+  if (element.type === 'sticky') {
+    rect = {
+      x: element.x + STICKY_TEXT_INSET.left,
+      y: element.y + STICKY_TEXT_INSET.top,
+      w: element.width - STICKY_TEXT_INSET.left - STICKY_TEXT_INSET.right,
+      h: element.height - STICKY_TEXT_INSET.top - STICKY_TEXT_INSET.bottom,
+    };
+    textStyle = { fontFamily: '"Noto Sans JP", sans-serif', fontWeight: 'normal', color: element.textColor, textAlign: 'left' };
+  } else {
+    rect = { x: element.x, y: element.y, w: element.width, h: element.height };
+    textStyle = { fontFamily: element.fontFamily, fontWeight: element.fontWeight, color: element.color, textAlign: element.align };
+  }
+
+  return (
+    <textarea
+      ref={ref}
+      value={element.content}
+      onChange={(e) => onChange(e.target.value)}
+      onBlur={onClose}
+      onMouseDown={(e) => e.stopPropagation()}
+      style={{
+        position: 'absolute',
+        left: canvas.offsetX + rect.x * canvas.scale,
+        top: canvas.offsetY + rect.y * canvas.scale,
+        width: rect.w * canvas.scale,
+        height: rect.h * canvas.scale,
+        fontSize: element.fontSize * canvas.scale,
+        lineHeight: 1.5,
+        margin: 0,
+        padding: 0,
+        border: 'none',
+        outline: '2px solid #3b82f6',
+        outlineOffset: 2,
+        resize: 'none',
+        boxSizing: 'border-box',
+        background: 'transparent',
+        zIndex: 50,
+        ...textStyle,
+      }}
     />
   );
 };
 
-// ── Element Renderer ──────────────────────────────────────────────────────────
+// ── Stage ─────────────────────────────────────────────────────────────────────
 
-const StickyNote: React.FC<{ el: StickyElement; isSelected: boolean; onSelect: (id: string, multi: boolean) => void }> = ({ el, isSelected, onSelect }) => {
+interface EditorCanvasProps {
+  width: number;
+  height: number;
+  onSelectElement: (id: string, multi: boolean) => void;
+}
+
+const EditorCanvas: React.FC<EditorCanvasProps> = ({ width, height, onSelectElement }) => {
   const dispatch = useAppDispatch();
-  const [editing, setEditing] = useState(false);
-  const [dragging, setDragging] = useState(false);
-  const dragStart = useRef({ mx: 0, my: 0, ex: 0, ey: 0 });
+  const { activeTool, currentStrokes, activeStroke, elements, selectedElementIds, canvas } = useAppSelector(s => s.editor);
+  const stageRef = useRef<Konva.Stage>(null);
+  const isDrawing = useRef(false);
+  const isPanning = useRef(false);
+  const panStart = useRef({ mx: 0, my: 0, ox: 0, oy: 0 });
+  const isDrawingRect = useRef(false);
+  const rectStart = useRef({ x: 0, y: 0 });
+  const [draftRect, setDraftRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const [editingId, setEditingId] = useState<string | null>(null);
 
-  const stickyColors = [
-    { bg: '#fef08a', text: '#1a1a2e' }, { bg: '#86efac', text: '#1a1a2e' },
-    { bg: '#93c5fd', text: '#1a1a2e' }, { bg: '#f9a8d4', text: '#1a1a2e' },
-    { bg: '#fdba74', text: '#1a1a2e' }, { bg: '#c4b5fd', text: '#1a1a2e' },
-  ];
+  useEffect(() => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    stage.container().style.cursor =
+      activeTool === 'pen' ? 'crosshair' :
+      activeTool === 'rectangle' ? 'crosshair' :
+      activeTool === 'eraser' ? 'cell' :
+      activeTool === 'hand' ? 'grab' : 'default';
+  }, [activeTool]);
+
+  useEffect(() => {
+    if (editingId && !elements.some(el => el.id === editingId)) setEditingId(null);
+  }, [elements, editingId]);
+
+  const handleMouseDown = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
+    const stage = stageRef.current;
+    if (!stage || e.target !== stage) return;
+    setEditingId(null);
+    if (activeTool === 'pen' || activeTool === 'eraser') {
+      const pos = stage.getRelativePointerPosition();
+      if (!pos) return;
+      isDrawing.current = true;
+      dispatch(startStroke(pos));
+    } else if (activeTool === 'rectangle') {
+      const pos = stage.getRelativePointerPosition();
+      if (!pos) return;
+      isDrawingRect.current = true;
+      rectStart.current = { x: pos.x, y: pos.y };
+      setDraftRect({ x: pos.x, y: pos.y, width: 0, height: 0 });
+    } else if (activeTool === 'hand') {
+      isPanning.current = true;
+      panStart.current = { mx: e.evt.clientX, my: e.evt.clientY, ox: canvas.offsetX, oy: canvas.offsetY };
+    } else {
+      dispatch(clearSelection());
+    }
+  }, [activeTool, canvas.offsetX, canvas.offsetY, dispatch]);
+
+  const handleMouseMove = useCallback((e: Konva.KonvaEventObject<MouseEvent>) => {
+    const stage = stageRef.current;
+    if (!stage) return;
+    if (isDrawing.current) {
+      const pos = stage.getRelativePointerPosition();
+      if (pos) dispatch(continueStroke(pos));
+    } else if (isDrawingRect.current) {
+      const pos = stage.getRelativePointerPosition();
+      if (!pos) return;
+      const s = rectStart.current;
+      // どの方向にドラッグしても始点・終点から左上/右下を求める
+      setDraftRect({
+        x: Math.min(s.x, pos.x),
+        y: Math.min(s.y, pos.y),
+        width: Math.abs(pos.x - s.x),
+        height: Math.abs(pos.y - s.y),
+      });
+    } else if (isPanning.current) {
+      dispatch(setCanvasTransform({
+        offsetX: panStart.current.ox + e.evt.clientX - panStart.current.mx,
+        offsetY: panStart.current.oy + e.evt.clientY - panStart.current.my,
+      }));
+    }
+  }, [dispatch]);
+
+  const handleMouseUp = useCallback(() => {
+    if (isDrawing.current) {
+      isDrawing.current = false;
+      dispatch(endStroke());
+    }
+    if (isDrawingRect.current) {
+      isDrawingRect.current = false;
+      // 極端に小さい矩形（クリックのみ等）は無視する
+      if (draftRect && draftRect.width > 3 && draftRect.height > 3) {
+        dispatch(addRectangle(draftRect));
+      }
+      setDraftRect(null);
+    }
+    isPanning.current = false;
+  }, [dispatch, draftRect]);
+
+  const handleWheel = useCallback((e: Konva.KonvaEventObject<WheelEvent>) => {
+    if (e.evt.ctrlKey || e.evt.metaKey) {
+      e.evt.preventDefault();
+      const delta = e.evt.deltaY > 0 ? 0.9 : 1.1;
+      dispatch(setCanvasTransform({ scale: Math.max(0.25, Math.min(3, canvas.scale * delta)) }));
+    }
+  }, [canvas.scale, dispatch]);
+
+  const editingElement = editingId
+    ? (elements.find(el => el.id === editingId) as StickyElement | TextElement | undefined)
+    : undefined;
 
   return (
-    <div
-      style={{
-        position: 'absolute', left: el.x, top: el.y, width: el.width, height: el.height,
-        backgroundColor: el.bgColor, borderRadius: 4,
-        boxShadow: isSelected ? '0 0 0 2px #3b82f6, 4px 6px 20px rgba(0,0,0,0.15)' : '4px 6px 20px rgba(0,0,0,0.1)',
-        cursor: dragging ? 'grabbing' : 'grab',
-        userSelect: 'none', zIndex: el.zIndex + 10,
-        transform: `rotate(${el.rotation}deg)`,
-        transition: dragging ? 'none' : 'box-shadow 0.15s',
-        display: 'flex', flexDirection: 'column',
-      }}
-      onMouseDown={(e) => {
-        if (editing) return;
-        e.stopPropagation();
-        onSelect(el.id, e.metaKey || e.ctrlKey);
-        setDragging(true);
-        dragStart.current = { mx: e.clientX, my: e.clientY, ex: el.x, ey: el.y };
-        const onMove = (ev: MouseEvent) => {
-          dispatch(updateElement({ id: el.id, updates: { x: dragStart.current.ex + ev.clientX - dragStart.current.mx, y: dragStart.current.ey + ev.clientY - dragStart.current.my } }));
-        };
-        const onUp = () => { setDragging(false); window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
-        window.addEventListener('mousemove', onMove);
-        window.addEventListener('mouseup', onUp);
-      }}
-    >
-      <div style={{ padding: '8px 10px 4px', display: 'flex', gap: 4, justifyContent: 'flex-end', opacity: isSelected ? 1 : 0, transition: 'opacity 0.15s' }}>
-        {stickyColors.map(c => (
-          <div key={c.bg} onClick={(e) => { e.stopPropagation(); dispatch(updateElement({ id: el.id, updates: { bgColor: c.bg, textColor: c.text } })); }}
-            style={{ width: 12, height: 12, borderRadius: '50%', backgroundColor: c.bg, border: el.bgColor === c.bg ? '2px solid #1a1a2e' : '1px solid rgba(0,0,0,0.2)', cursor: 'pointer' }} />
-        ))}
-      </div>
-      <textarea
-        value={el.content}
-        onDoubleClick={() => setEditing(true)}
-        onBlur={() => setEditing(false)}
-        onChange={(e) => dispatch(updateElement({ id: el.id, updates: { content: e.target.value } }))}
-        readOnly={!editing}
-        style={{
-          flex: 1, background: 'transparent', border: 'none', outline: 'none', resize: 'none',
-          padding: '4px 12px 12px', fontFamily: '"Noto Sans JP", sans-serif', fontSize: el.fontSize,
-          color: el.textColor, cursor: editing ? 'text' : 'inherit', lineHeight: 1.5,
-        }}
-        onMouseDown={(e) => { if (editing) e.stopPropagation(); }}
-      />
-    </div>
-  );
-};
-
-const ShapeEl: React.FC<{ el: ShapeElement; isSelected: boolean; onSelect: (id: string, multi: boolean) => void }> = ({ el, isSelected, onSelect }) => {
-  const dispatch = useAppDispatch();
-  const [dragging, setDragging] = useState(false);
-  const dragStart = useRef({ mx: 0, my: 0, ex: 0, ey: 0 });
-  const renderShape = () => {
-    const w = el.width, h = el.height;
-    if (el.shapeType === 'circle') return <ellipse cx={w / 2} cy={h / 2} rx={w / 2 - el.strokeWidth} ry={h / 2 - el.strokeWidth} fill={el.fillColor} stroke={el.strokeColor} strokeWidth={el.strokeWidth} />;
-    if (el.shapeType === 'arrow') return <path d={`M 0 ${h / 2} L ${w * 0.65} ${h / 2} M ${w * 0.5} ${h * 0.2} L ${w} ${h / 2} L ${w * 0.5} ${h * 0.8}`} fill="none" stroke={el.strokeColor} strokeWidth={el.strokeWidth} strokeLinecap="round" strokeLinejoin="round" />;
-    if (el.shapeType === 'line') return <line x1={0} y1={h / 2} x2={w} y2={h / 2} stroke={el.strokeColor} strokeWidth={el.strokeWidth} strokeLinecap="round" />;
-    return <rect x={el.strokeWidth / 2} y={el.strokeWidth / 2} width={w - el.strokeWidth} height={h - el.strokeWidth} fill={el.fillColor} stroke={el.strokeColor} strokeWidth={el.strokeWidth} rx={4} />;
-  };
-  return (
-    <div style={{
-      position: 'absolute', left: el.x, top: el.y, width: el.width, height: el.height,
-      opacity: el.opacity, cursor: dragging ? 'grabbing' : 'grab', zIndex: el.zIndex + 10,
-      outline: isSelected ? '2px solid #3b82f6' : 'none', outlineOffset: 2,
-    }}
-      onMouseDown={(e) => {
-        e.stopPropagation(); onSelect(el.id, e.metaKey || e.ctrlKey); setDragging(true);
-        dragStart.current = { mx: e.clientX, my: e.clientY, ex: el.x, ey: el.y };
-        const onMove = (ev: MouseEvent) => dispatch(updateElement({ id: el.id, updates: { x: dragStart.current.ex + ev.clientX - dragStart.current.mx, y: dragStart.current.ey + ev.clientY - dragStart.current.my } }));
-        const onUp = () => { setDragging(false); window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
-        window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp);
-      }}>
-      <svg width={el.width} height={el.height} style={{ display: 'block' }}>{renderShape()}</svg>
-    </div>
-  );
-};
-
-const TextEl: React.FC<{ el: TextElement; isSelected: boolean; onSelect: (id: string, multi: boolean) => void }> = ({ el, isSelected, onSelect }) => {
-  const dispatch = useAppDispatch();
-  const [editing, setEditing] = useState(false);
-  const [dragging, setDragging] = useState(false);
-  const dragStart = useRef({ mx: 0, my: 0, ex: 0, ey: 0 });
-  return (
-    <div style={{
-      position: 'absolute', left: el.x, top: el.y, minWidth: el.width, minHeight: el.height,
-      outline: isSelected ? '2px solid #3b82f6' : '2px solid transparent', outlineOffset: 2,
-      cursor: dragging ? 'grabbing' : 'grab', zIndex: el.zIndex + 10, padding: 4,
-    }}
-      onMouseDown={(e) => {
-        if (editing) return; e.stopPropagation(); onSelect(el.id, e.metaKey || e.ctrlKey); setDragging(true);
-        dragStart.current = { mx: e.clientX, my: e.clientY, ex: el.x, ey: el.y };
-        const onMove = (ev: MouseEvent) => dispatch(updateElement({ id: el.id, updates: { x: dragStart.current.ex + ev.clientX - dragStart.current.mx, y: dragStart.current.ey + ev.clientY - dragStart.current.my } }));
-        const onUp = () => { setDragging(false); window.removeEventListener('mousemove', onMove); window.removeEventListener('mouseup', onUp); };
-        window.addEventListener('mousemove', onMove); window.addEventListener('mouseup', onUp);
-      }}
-      onDoubleClick={() => setEditing(true)}>
-      {editing ? (
-        <textarea autoFocus value={el.content} onChange={(e) => dispatch(updateElement({ id: el.id, updates: { content: e.target.value } }))}
-          onBlur={() => setEditing(false)} onMouseDown={(e) => e.stopPropagation()}
-          style={{ background: 'transparent', border: 'none', outline: 'none', resize: 'none', width: '100%', minHeight: 40, fontFamily: el.fontFamily, fontSize: el.fontSize, fontWeight: el.fontWeight, color: el.color, textAlign: el.align }} />
-      ) : (
-        <div style={{ fontFamily: el.fontFamily, fontSize: el.fontSize, fontWeight: el.fontWeight, color: el.color, textAlign: el.align, whiteSpace: 'pre-wrap', wordBreak: 'break-word' }}>{el.content}</div>
+    <div style={{ position: 'absolute', inset: 0 }}>
+      <Stage
+        ref={stageRef}
+        width={width}
+        height={height}
+        x={canvas.offsetX}
+        y={canvas.offsetY}
+        scaleX={canvas.scale}
+        scaleY={canvas.scale}
+        onMouseDown={handleMouseDown}
+        onMouseMove={handleMouseMove}
+        onMouseUp={handleMouseUp}
+        onMouseLeave={handleMouseUp}
+        onWheel={handleWheel}
+      >
+        <Layer listening={false}>
+          {currentStrokes.map((stroke, i) => <StrokeLine key={i} stroke={stroke} />)}
+          {activeStroke && <StrokeLine stroke={activeStroke} />}
+        </Layer>
+        <Layer>
+          {elements.filter(el => el.visible).map(el => {
+            const isSelected = selectedElementIds.includes(el.id);
+            const editing = editingId === el.id;
+            if (el.type === 'sticky') return (
+              <StickyNoteShape key={el.id} el={el} isSelected={isSelected} editing={editing}
+                onSelect={onSelectElement} onEdit={setEditingId} />
+            );
+            if (el.type === 'shape') return (
+              <ShapeElementShape key={el.id} el={el} isSelected={isSelected} onSelect={onSelectElement} />
+            );
+            if (el.type === 'text') return (
+              <TextElementShape key={el.id} el={el} isSelected={isSelected} editing={editing}
+                onSelect={onSelectElement} onEdit={setEditingId} />
+            );
+            return null;
+          })}
+        </Layer>
+        {draftRect && (
+          <Layer listening={false}>
+            <Rect
+              x={draftRect.x} y={draftRect.y}
+              width={draftRect.width} height={draftRect.height}
+              stroke="#1a1a2e" strokeWidth={2} dash={[6, 4]}
+            />
+          </Layer>
+        )}
+      </Stage>
+      {editingElement && (
+        <EditOverlay
+          element={editingElement}
+          canvas={canvas}
+          onChange={(content) => dispatch(updateElement({ id: editingElement.id, updates: { content } }))}
+          onClose={() => setEditingId(null)}
+        />
       )}
     </div>
   );
 };
 
-const ElementsLayer: React.FC<{ onSelectElement: (id: string, multi: boolean) => void }> = ({ onSelectElement }) => {
-  const { elements, selectedElementIds } = useAppSelector(s => s.editor);
-  return (
-    <>
-      {elements.filter(el => el.visible).map(el => {
-        const isSelected = selectedElementIds.includes(el.id);
-        if (el.type === 'sticky') return <StickyNote key={el.id} el={el as StickyElement} isSelected={isSelected} onSelect={onSelectElement} />;
-        if (el.type === 'shape') return <ShapeEl key={el.id} el={el as ShapeElement} isSelected={isSelected} onSelect={onSelectElement} />;
-        if (el.type === 'text') return <TextEl key={el.id} el={el as TextElement} isSelected={isSelected} onSelect={onSelectElement} />;
-        return null;
-      })}
-    </>
-  );
-};
-
-export { DrawingCanvas, ElementsLayer };
+export { EditorCanvas };
