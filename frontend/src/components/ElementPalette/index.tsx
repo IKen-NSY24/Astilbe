@@ -1,16 +1,14 @@
 import React from 'react';
 import { useAppDispatch } from '../../hooks';
-import { addSticky, addTextElement, addShape } from '../../store/slices/editorSlice';
+import type { AppDispatch } from '../../store';
+import { addTextElement, addShape } from '../../store/slices/editorSlice';
 
 const CENTER = { x: 800, y: 500 };
 
 const items = [
-  { label: '🗒️', title: '付箋', action: (dispatch: any) => dispatch(addSticky(CENTER)) },
-  { label: '𝗧', title: 'テキスト', action: (dispatch: any) => dispatch(addTextElement(CENTER)) },
-  { label: '⬜', title: '四角形', action: (dispatch: any) => dispatch(addShape({ ...CENTER, shapeType: 'rectangle' })) },
-  { label: '⭕', title: '楕円', action: (dispatch: any) => dispatch(addShape({ ...CENTER, shapeType: 'circle' })) },
-  { label: '→', title: '矢印', action: (dispatch: any) => dispatch(addShape({ ...CENTER, shapeType: 'arrow' })) },
-  { label: '—', title: '直線', action: (dispatch: any) => dispatch(addShape({ ...CENTER, shapeType: 'line' })) },
+  { label: '𝗧', title: 'テキスト', action: (dispatch: AppDispatch) => dispatch(addTextElement(CENTER)) },
+  { label: '⬜', title: '四角形', action: (dispatch: AppDispatch) => dispatch(addShape({ ...CENTER, shapeType: 'rectangle' })) },
+  { label: '—', title: '直線', action: (dispatch: AppDispatch) => dispatch(addShape({ ...CENTER, shapeType: 'line' })) },
 ];
 
 const ElementPalette: React.FC = () => {
