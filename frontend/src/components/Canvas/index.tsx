@@ -4,7 +4,7 @@ import Konva from 'konva';
 import { useAppDispatch, useAppSelector } from '../../hooks';
 import {
   startStroke, continueStroke, endStroke,
-  clearSelection, updateElement, addRectangle,
+  clearSelection, updateElement, addRectangle, addLine
 } from '../../store/slices/editorSlice';
 import { StrokeData, TextElement, ShapeElement } from '../../types';
 
@@ -62,7 +62,8 @@ const ShapeElementShape: React.FC<{
 
   let shape: React.ReactNode;
   if (el.shapeType === 'line') {
-    shape = <Line points={[0, h / 2, w, h / 2]} stroke={el.strokeColor} strokeWidth={el.strokeWidth} lineCap="round" />;
+    // 始点(0,0) から (w, h) へ線を引く。w か h の一方は0なので、必ず縦か横の線になる。
+    shape = <Line points={[0, 0, w, h]} stroke={el.strokeColor} strokeWidth={el.strokeWidth} lineCap="round" />;
   } else {
     shape = <Rect x={el.strokeWidth / 2} y={el.strokeWidth / 2}
       width={Math.max(w - el.strokeWidth, 0)} height={Math.max(h - el.strokeWidth, 0)}
@@ -146,8 +147,11 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ width, height, onSelectElem
   const stageRef = useRef<Konva.Stage>(null);
   const isDrawing = useRef(false);
   const isDrawingRect = useRef(false);
+  const isDrawingLine = useRef(false);
   const rectStart = useRef({ x: 0, y: 0 });
+  const lineStart = useRef({ x: 0, y: 0 });
   const [draftRect, setDraftRect] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
+  const [draftLine, setDraftLine] = useState<{ x: number; y: number; width: number; height: number } | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
 
   useEffect(() => {
@@ -156,6 +160,7 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ width, height, onSelectElem
     stage.container().style.cursor =
       activeTool === 'pen' ? 'crosshair' :
       activeTool === 'rectangle' ? 'crosshair' :
+      activeTool === 'line' ? 'crosshair' :
       activeTool === 'eraser' ? 'cell' : 'default';
   }, [activeTool]);
 
@@ -178,6 +183,12 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ width, height, onSelectElem
       isDrawingRect.current = true;
       rectStart.current = { x: pos.x, y: pos.y };
       setDraftRect({ x: pos.x, y: pos.y, width: 0, height: 0 });
+    } else if (activeTool === 'line') {
+      const pos = stage.getRelativePointerPosition();
+      if (!pos) return;
+      isDrawingLine.current = true;
+      lineStart.current = { x: pos.x, y: pos.y };
+      setDraftLine({ x: pos.x, y: pos.y, width: 0, height: 0 });
     } else {
       dispatch(clearSelection());
     }
@@ -200,6 +211,21 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ width, height, onSelectElem
         width: Math.abs(pos.x - s.x),
         height: Math.abs(pos.y - s.y),
       });
+    } else if (isDrawingLine.current) {
+      const pos = stage.getRelativePointerPosition();
+      if (!pos) return;
+      const s = lineStart.current;
+      // 横の移動量と縦の移動量を比べて、大きい方の向きにスナップする
+      const dx = pos.x - s.x;   // 横の移動（符号つき：右が＋、左が−）
+      const dy = pos.y - s.y;   // 縦の移動（符号つき：下が＋、上が−）
+
+      if (Math.abs(dx) >= Math.abs(dy)) {
+        // 横移動が大きい → 水平線。始点(s.x, s.y) から x方向だけ伸ばす
+        setDraftLine({ x: s.x, y: s.y, width: dx, height: 0 });
+      } else {
+        // 縦移動が大きい → 垂直線。始点(s.x, s.y) から y方向だけ伸ばす
+        setDraftLine({ x: s.x, y: s.y, width: 0, height: dy });
+      }
     }
   }, [dispatch]);
 
@@ -216,7 +242,14 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ width, height, onSelectElem
       }
       setDraftRect(null);
     }
-  }, [dispatch, draftRect]);
+    if (isDrawingLine.current) {
+      isDrawingLine.current = false;
+      if (draftLine && (draftLine.x > 3 || draftLine.y > 3)) {
+        dispatch(addLine(draftLine));
+      }
+      setDraftLine(null);
+    }
+  }, [dispatch, draftRect, draftLine]);
 
   const editingElement = editingId
     ? (elements.find(el => el.id === editingId && el.type === 'text') as TextElement | undefined)
@@ -256,6 +289,15 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ width, height, onSelectElem
             <Rect
               x={draftRect.x} y={draftRect.y}
               width={draftRect.width} height={draftRect.height}
+              stroke="#1a1a2e" strokeWidth={2} dash={[6, 4]}
+            />
+          </Layer>
+        )}
+        {draftLine && (
+          <Layer listening={false}>
+            <Rect
+              x={draftLine.x} y={draftLine.y}
+              width={draftLine.width} height={draftLine.height}
               stroke="#1a1a2e" strokeWidth={2} dash={[6, 4]}
             />
           </Layer>

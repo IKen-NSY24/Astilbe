@@ -118,6 +118,18 @@ const editorSlice = createSlice({
       state.elements.push(el);
       state.selectedId = el.id;
     },
+    addLine(state, action: PayloadAction<{ x: number; y: number; width: number; height: number  }>) {
+      const el: ShapeElement = {
+        id: uuidv4(), type: 'shape',
+        x: action.payload.x, y: action.payload.y,
+        width: action.payload.width, height: action.payload.height, rotation: 0,
+        zIndex: state.elements.length, locked: false, visible: true,
+        shapeType: 'line',
+        fillColor: 'transparent', strokeColor: '#1a1a2e', strokeWidth: 2, opacity: 1,
+      };
+      state.elements.push(el);
+      state.selectedId = el.id;
+    },
     loadElements(state, action: PayloadAction<CanvasElement[]>) {
       state.elements = action.payload;
       state.selectedId = null;
@@ -129,6 +141,6 @@ export const {
   setActiveTool, setPenSettings, startStroke, continueStroke, endStroke,
   clearStrokes, addElement, updateElement, deleteElement,
   selectElement, clearSelection, addTextElement, addShape,
-  addRectangle, loadElements,
+  addRectangle, addLine, loadElements,
 } = editorSlice.actions;
 export default editorSlice.reducer;
