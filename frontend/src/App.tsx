@@ -5,7 +5,7 @@ import { useAppDispatch } from './hooks';
 import { EditorCanvas } from './components/Canvas';
 import Toolbar from './components/Toolbar';
 import ElementPalette from './components/ElementPalette';
-import { clearSelection, selectElement } from './store/slices/editorSlice';
+import { clearSelection, selectElement, deleteElement } from './store/slices/editorSlice';
 
 const Editor: React.FC = () => {
   const dispatch = useAppDispatch();
@@ -19,7 +19,17 @@ const Editor: React.FC = () => {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') dispatch(clearSelection());
+      if (e.key === 'Escape') {
+        dispatch(clearSelection());
+        return;
+      }
+      if (e.key === 'Delete' || e.key === 'Backspace') {
+        // テキスト編集中（textarea/input にフォーカス）は誤削除しないようスキップし、
+        // 入力中の文字削除として通常通り振る舞わせる
+        const ae = document.activeElement;
+        if (ae && (ae.tagName === 'TEXTAREA' || ae.tagName === 'INPUT')) return;
+        dispatch(deleteElement());
+      }
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
