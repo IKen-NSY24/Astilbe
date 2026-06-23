@@ -42,8 +42,8 @@ const editorSlice = createSlice({
     startStroke(state, action: PayloadAction<Point>) {
       state.activeStroke = {
         points: [action.payload],
-        color: state.activeTool === 'eraser' ? '#ffffff' : state.penSettings.color,
-        width: state.activeTool === 'eraser' ? state.penSettings.width * 4 : state.penSettings.width,
+        color: state.penSettings.color,
+        width: state.penSettings.width,
         opacity: state.penSettings.opacity,
       };
     },

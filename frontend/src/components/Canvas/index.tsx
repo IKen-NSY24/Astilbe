@@ -160,8 +160,7 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ width, height, onSelectElem
     stage.container().style.cursor =
       activeTool === 'pen' ? 'crosshair' :
       activeTool === 'rectangle' ? 'crosshair' :
-      activeTool === 'line' ? 'crosshair' :
-      activeTool === 'eraser' ? 'cell' : 'default';
+      activeTool === 'line' ? 'crosshair' : 'default';
   }, [activeTool]);
 
   useEffect(() => {
@@ -172,7 +171,7 @@ const EditorCanvas: React.FC<EditorCanvasProps> = ({ width, height, onSelectElem
     const stage = stageRef.current;
     if (!stage || e.target !== stage) return;
     setEditingId(null);
-    if (activeTool === 'pen' || activeTool === 'eraser') {
+    if (activeTool === 'pen') {
       const pos = stage.getRelativePointerPosition();
       if (!pos) return;
       isDrawing.current = true;
