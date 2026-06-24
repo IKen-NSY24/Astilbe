@@ -4,7 +4,7 @@ import { setActiveTool, setPenSettings, clearStrokes, deleteElement } from '../.
 
 const tools = [
   { id: 'pen' as const, label: '✏️', title: 'ペン' },
-  { id: 'eraser' as const, label: '⬜', title: '消しゴム' },
+  { id: 'line' as const , label: '-', title: '直線'},
   { id: 'rectangle' as const, label: '▭', title: '長方形' },
   { id: 'select' as const, label: '↖', title: '選択' },
 ];
@@ -42,24 +42,20 @@ const Toolbar: React.FC = () => {
       ))}
       {divider}
 
-      {(activeTool === 'pen' || activeTool === 'eraser') && <>
-        {activeTool === 'pen' && (
-          <input type="color" value={penSettings.color}
-            onChange={e => dispatch(setPenSettings({ color: e.target.value }))}
-            title="色" style={{ width: 28, height: 28, border: 'none', cursor: 'pointer', borderRadius: 4 }} />
-        )}
+      {activeTool === 'pen' && <>
+        <input type="color" value={penSettings.color}
+          onChange={e => dispatch(setPenSettings({ color: e.target.value }))}
+          title="色" style={{ width: 28, height: 28, border: 'none', cursor: 'pointer', borderRadius: 4 }} />
         <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
           <span style={{ fontSize: 11, color: '#6b7280' }}>太さ</span>
           <input type="range" min={1} max={30} value={penSettings.width}
             onChange={e => dispatch(setPenSettings({ width: +e.target.value }))} style={{ width: 60 }} />
         </div>
-        {activeTool === 'pen' && (
-          <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
-            <span style={{ fontSize: 11, color: '#6b7280' }}>透明度</span>
-            <input type="range" min={0.1} max={1} step={0.05} value={penSettings.opacity}
-              onChange={e => dispatch(setPenSettings({ opacity: +e.target.value }))} style={{ width: 60 }} />
-          </div>
-        )}
+        <div style={{ display: 'flex', alignItems: 'center', gap: 4 }}>
+          <span style={{ fontSize: 11, color: '#6b7280' }}>透明度</span>
+          <input type="range" min={0.1} max={1} step={0.05} value={penSettings.opacity}
+            onChange={e => dispatch(setPenSettings({ opacity: +e.target.value }))} style={{ width: 60 }} />
+        </div>
         <button title="全消去" onClick={() => dispatch(clearStrokes())} style={{ ...btn(false), color: '#ef4444' }}>🗑</button>
         {divider}
       </>}
