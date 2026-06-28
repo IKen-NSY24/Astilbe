@@ -14,8 +14,8 @@ async function bootstrap() {
   const port = process.env.PORT || 3001;
   await app.listen(port);
   console.log(`\n🚀 MemoEditor API running at http://localhost:${port}`);
-  console.log(`   GET/POST /api/notes`);
-  console.log(`   GET/PUT/DELETE /api/notes/:id\n`);
+  console.log(`   GET /api/canvas`);
+  console.log(`   PUT /api/canvas\n`);
 }
 
 bootstrap();
