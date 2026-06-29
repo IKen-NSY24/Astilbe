@@ -1,6 +1,9 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { useAppDispatch, useAppSelector } from '../../hooks';
 import { setActiveTool, setPenSettings, clearStrokes, deleteElement } from '../../store/slices/editorSlice';
+import { saveCanvas } from '../../api/canvas';
+
+type SaveStatus = 'idle' | 'saving' | 'saved' | 'error';
 
 const tools = [
   { id: 'pen' as const, label: '✏️', title: 'ペン' },
@@ -11,7 +14,29 @@ const tools = [
 
 const Toolbar: React.FC = () => {
   const dispatch = useAppDispatch();
-  const { activeTool, penSettings, selectedId } = useAppSelector(s => s.editor);
+  const { activeTool, penSettings, selectedId, elements, currentStrokes } = useAppSelector(s => s.editor);
+  const [saveStatus, setSaveStatus] = useState<SaveStatus>('idle');
+
+  const handleSave = async () => {
+    setSaveStatus('saving');
+    try {
+      await saveCanvas({ elements, strokes: currentStrokes });
+      setSaveStatus('saved');
+      // 少し経ったらラベルを元に戻す
+      setTimeout(() => setSaveStatus('idle'), 2000);
+    } catch (err) {
+      console.error(err);
+      setSaveStatus('error');
+      setTimeout(() => setSaveStatus('idle'), 3000);
+    }
+  };
+
+  const saveLabel: Record<SaveStatus, string> = {
+    idle: '保存',
+    saving: '保存中…',
+    saved: '保存しました ✓',
+    error: '保存失敗',
+  };
 
   const btn = (active: boolean): React.CSSProperties => ({
     width: 36, height: 36,
@@ -66,6 +91,23 @@ const Toolbar: React.FC = () => {
       </>}
 
       <div style={{ flex: 1 }} />
+
+      <button
+        title="保存"
+        onClick={handleSave}
+        disabled={saveStatus === 'saving'}
+        style={{
+          height: 36, padding: '0 14px',
+          border: '1px solid #3b82f6', borderRadius: 8,
+          backgroundColor: saveStatus === 'error' ? '#fef2f2' : '#3b82f6',
+          color: saveStatus === 'error' ? '#ef4444' : 'white',
+          cursor: saveStatus === 'saving' ? 'default' : 'pointer',
+          fontSize: 13, fontWeight: 600,
+          opacity: saveStatus === 'saving' ? 0.7 : 1,
+        }}
+      >
+        {saveLabel[saveStatus]}
+      </button>
     </div>
   );
 };

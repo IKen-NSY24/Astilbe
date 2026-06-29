@@ -75,6 +75,13 @@
 - 既知の課題 / 次回: 復元時は elements と strokes の両方を戻す必要あり（現状 loadElements は elements のみ）。FE 側の保存/復元配線が次回スコープ。
 - 記事ネタ: 「ID採番をやめて固定singletonにする」割り切り、SQLite×JSON文字列の素直な持ち方、AIに破壊的変更を任せる時の2段階フロー
 
+### [6/29] 保存機能（保存ボタン→PUT）
+- fetchでPUT送信、elementsとstrokes両方を{data:{...}}で保存
+- 確認: Network で OPTIONS(204)→PUT(200)、Prisma StudioでDBレコード確認
+- 学び: fetchは取得専用じゃない、methodで送信もできる通信全般のメソッド
+- 学び: OPTIONS 204 はCORSのプリフライト（事前確認）で正常
+- 学び: コードのfetch と Networkタブの Fetch/XHRフィルターは別物
+
 
 ---
 
