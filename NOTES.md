@@ -59,6 +59,29 @@
 
 <!-- Prisma/SQLite, JSON契約, 保存・復元のメモ -->
 
+### [6/28] バックエンドを単一ワークスペース方針で作り直し（DB＋API、前半）
+- やったこと: in-memory Map の notes API を捨てて、Prisma + SQLite で永続化する canvas API に作り直した。今回は DB と API まで。FE の保存ボタン・復元の配線は次回。
+- 進め方: 破壊的変更なので「(1)変更・削除ファイルと影響範囲を報告 → (2)確認後に実行」の2段階。API入出力の"殻"の形は曖昧だったので実装前に質問→選択肢から確定させた。
+- 設計判断:
+  - 単一レコード = 固定 id="singleton"。ID採番も一覧APIも要らない（GET/PUT の2本だけ）
+  - SQLite は Json 型を直接持てない → `data` は String で持ち、read/write で `JSON.parse`/`stringify`
+  - BE は `data` の中身（elements/strokes）を一切解釈せず透過するだけ。型も Note を消して持たない方針に
+  - レスポンス形は契約 doc どおり `{ id, data:{elements,strokes}, updatedAt }`。レコード無しは `updatedAt:null` の空データを返す
+- ハマり/気づき:
+  - notes 削除を先に `git rm` してしまい、コミット分割（Prisma導入 / API作り直し）の1個目に削除が混ざった。`git restore --staged` で巻き戻して2個目に寄せた → コミットを分けるなら削除のタイミングも分ける意識が要る
+  - Prisma の upsert は create/update を1発で書けて、固定レコードの「無ければ作る・あれば更新」にぴったり
+  - `updatedAt DateTime @updatedAt` で更新時刻が自動。手で `new Date()` を入れていた旧 notes より楽
+- 確認: curl で GET(空)→PUT→GET(保存後) と CORS(Origin 3000) を確認。dev.db は .gitignore へ。
+- 既知の課題 / 次回: 復元時は elements と strokes の両方を戻す必要あり（現状 loadElements は elements のみ）。FE 側の保存/復元配線が次回スコープ。
+- 記事ネタ: 「ID採番をやめて固定singletonにする」割り切り、SQLite×JSON文字列の素直な持ち方、AIに破壊的変更を任せる時の2段階フロー
+
+### [6/29] 保存機能（保存ボタン→PUT）
+- fetchでPUT送信、elementsとstrokes両方を{data:{...}}で保存
+- 確認: Network で OPTIONS(204)→PUT(200)、Prisma StudioでDBレコード確認
+- 学び: fetchは取得専用じゃない、methodで送信もできる通信全般のメソッド
+- 学び: OPTIONS 204 はCORSのプリフライト（事前確認）で正常
+- 学び: コードのfetch と Networkタブの Fetch/XHRフィルターは別物
+
 
 ---
 

@@ -134,6 +134,12 @@ const editorSlice = createSlice({
       state.elements = action.payload;
       state.selectedId = null;
     },
+    // elements と strokes の両方を同時に復元する（起動時の GET /api/canvas 用）
+    loadCanvas(state, action: PayloadAction<{ elements: CanvasElement[]; strokes: StrokeData[] }>) {
+      state.elements = action.payload.elements;
+      state.currentStrokes = action.payload.strokes;
+      state.selectedId = null;
+    },
   },
 });
 
@@ -141,6 +147,6 @@ export const {
   setActiveTool, setPenSettings, startStroke, continueStroke, endStroke,
   clearStrokes, addElement, updateElement, deleteElement,
   selectElement, clearSelection, addTextElement, addShape,
-  addRectangle, addLine, loadElements,
+  addRectangle, addLine, loadElements, loadCanvas,
 } = editorSlice.actions;
 export default editorSlice.reducer;

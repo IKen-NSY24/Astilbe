@@ -1,0 +1,19 @@
+// MemoEditor — 単一ワークスペース = 1キャンバス1レコード
+// 詳細は docs/json-contract.md を参照
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "sqlite"
+  url      = env("DATABASE_URL")
+}
+
+// 単一キャンバス。レコードは id="singleton" の1件のみを使う。
+// SQLite は Json 型を直接持てないため、data は JSON文字列(String)として保存する。
+model Canvas {
+  id        String   @id // "singleton" 固定
+  data      String // JSON文字列 { elements, strokes }
+  updatedAt DateTime @updatedAt
+}
