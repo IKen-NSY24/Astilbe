@@ -5,11 +5,28 @@ import { useAppDispatch } from './hooks';
 import { EditorCanvas } from './components/Canvas';
 import Toolbar from './components/Toolbar';
 import ElementPalette from './components/ElementPalette';
-import { clearSelection, selectElement, deleteElement } from './store/slices/editorSlice';
+import { clearSelection, selectElement, deleteElement, loadCanvas } from './store/slices/editorSlice';
+import { fetchCanvas } from './api/canvas';
 
 const Editor: React.FC = () => {
   const dispatch = useAppDispatch();
   const [canvasSize, setCanvasSize] = useState({ w: window.innerWidth - 140, h: window.innerHeight - 56 });
+
+  // 起動時に保存済みのキャンバス内容を取得して復元する。
+  // 未保存（初回）は空配列が返るだけなので、空キャンバスでそのまま起動する。
+  useEffect(() => {
+    fetchCanvas()
+      .then(({ data }) => {
+        dispatch(loadCanvas({
+          elements: data?.elements ?? [],
+          strokes: data?.strokes ?? [],
+        }));
+      })
+      .catch((err) => {
+        // 取得失敗時は起動をブロックせず、空キャンバスで続行する。
+        console.error('キャンバスの復元に失敗しました', err);
+      });
+  }, [dispatch]);
 
   useEffect(() => {
     const onResize = () => setCanvasSize({ w: window.innerWidth - 140, h: window.innerHeight - 56 });

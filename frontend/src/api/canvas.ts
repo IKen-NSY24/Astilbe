@@ -9,6 +9,23 @@ export interface CanvasData {
   strokes: StrokeData[];
 }
 
+// GET /api/canvas のレスポンス形。契約 doc に準拠。
+// 未保存時は data が { elements: [], strokes: [] }、updatedAt が null で返る。
+export interface CanvasResponse {
+  id: string;
+  data: CanvasData;
+  updatedAt: string | null;
+}
+
+// キャンバス内容を取得する。起動時の復元に使う。
+export async function fetchCanvas(): Promise<CanvasResponse> {
+  const res = await fetch(`${API_BASE}/canvas`, { method: 'GET' });
+  if (!res.ok) {
+    throw new Error(`読み込みに失敗しました (HTTP ${res.status})`);
+  }
+  return res.json() as Promise<CanvasResponse>;
+}
+
 // キャンバス内容を保存（上書き）する。BE は body.data をそのまま透過保存する。
 export async function saveCanvas(data: CanvasData): Promise<void> {
   const res = await fetch(`${API_BASE}/canvas`, {
